@@ -1,4 +1,3 @@
-
 define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory, BISON) {
 
     var GameClient = Class.extend({
@@ -44,74 +43,63 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
             this.isListening = false;
         },
         
+        // ======== САМАЯ ВАЖНАЯ ЧАСТЬ: ПОДКЛЮЧЕНИЕ К СЕРВЕРУ ========
         connect: function(dispatcherMode) {
-    // Всегда коннектимся к игровому серверу на Render
-    var url = "wss://botaqeae.onrender.com/",
-        self = this;
+            // Всегда коннектимся к игровому серверу на Render
+            var url = "wss://botaqeae.onrender.com/",
+                self = this;
             
-            log.info("Trying to connect to server : "+url);
+            log.info("Trying to connect to server : " + url);
 
-            if(window.MozWebSocket) {
+            if (window.MozWebSocket) {
                 this.connection = new MozWebSocket(url);
             } else {
                 this.connection = new WebSocket(url);
             }
             
-            if(dispatcherMode) {
-                this.connection.onmessage = function(e) {
-                    var reply = JSON.parse(e.data);
+            // dispatcherMode больше НЕ используем – всегда обычное подключение к миру
+            this.connection.onopen = function(e) {
+                log.info("Connected to server " + url);
 
-                    if(reply.status === 'OK') {
-                        self.dispatched_callback(reply.host, reply.port);
-                    } else if(reply.status === 'FULL') {
-                        alert("BrowserQuest is currently at maximum player population. Please retry later.");
+                // Сразу говорим игре "мы подключились"
+                if (self.connected_callback) {
+                    self.connected_callback();
+                }
+            };
+
+            this.connection.onmessage = function(e) {
+                // Если сервер скажет "timeout" — запоминаем
+                if (e.data === 'timeout') {
+                    self.isTimeout = true;
+                    return;
+                }
+                
+                // Остальные сообщения – игровые
+                self.receiveMessage(e.data);
+            };
+
+            this.connection.onerror = function(e) {
+                log.error(e, true);
+            };
+
+            this.connection.onclose = function() {
+                log.debug("Connection closed");
+                $('#container').addClass('error');
+                
+                if (self.disconnected_callback) {
+                    if (self.isTimeout) {
+                        self.disconnected_callback("You have been disconnected for being inactive for too long");
                     } else {
-                        alert("Unknown error while connecting to BrowserQuest.");
+                        self.disconnected_callback("The connection to BrowserQuest has been lost");
                     }
-                };
-            } else {
-                this.connection.onopen = function(e) {
-                    log.info("Connected to server "+self.host+":"+self.port);
-                };
-
-                this.connection.onmessage = function(e) {
-                    if(e.data === "go") {
-                        if(self.connected_callback) {
-                            self.connected_callback();
-                        }
-                        return;
-                    }
-                    if(e.data === 'timeout') {
-                        self.isTimeout = true;
-                        return;
-                    }
-                    
-                    self.receiveMessage(e.data);
-                };
-
-                this.connection.onerror = function(e) {
-                    log.error(e, true);
-                };
-
-                this.connection.onclose = function() {
-                    log.debug("Connection closed");
-                    $('#container').addClass('error');
-                    
-                    if(self.disconnected_callback) {
-                        if(self.isTimeout) {
-                            self.disconnected_callback("You have been disconnected for being inactive for too long");
-                        } else {
-                            self.disconnected_callback("The connection to BrowserQuest has been lost");
-                        }
-                    }
-                };
-            }
+                }
+            };
         },
 
         sendMessage: function(json) {
             var data;
-            if(this.connection.readyState === 1) {
-                if(this.useBison) {
+            if (this.connection && this.connection.readyState === 1) {
+                if (this.useBison) {
                     data = BISON.encode(json);
                 } else {
                     data = JSON.stringify(json);
@@ -123,8 +111,8 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         receiveMessage: function(message) {
             var data, action;
         
-            if(this.isListening) {
-                if(this.useBison) {
+            if (this.isListening) {
+                if (this.useBison) {
                     data = BISON.decode(message);
                 } else {
                     data = JSON.parse(message);
@@ -132,8 +120,8 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
 
                 log.debug("data: " + message);
 
-                if(data instanceof Array) {
-                    if(data[0] instanceof Array) {
+                if (data instanceof Array) {
+                    if (data[0] instanceof Array) {
                         // Multiple actions received
                         this.receiveActionBatch(data);
                     } else {
@@ -146,7 +134,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
     
         receiveAction: function(data) {
             var action = data[0];
-            if(this.handlers[action] && _.isFunction(this.handlers[action])) {
+            if (this.handlers[action] && _.isFunction(this.handlers[action])) {
                 this.handlers[action].call(this, data);
             }
             else {
@@ -169,7 +157,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
                 y = data[4],
                 hp = data[5];
         
-            if(this.welcome_callback) {
+            if (this.welcome_callback) {
                 this.welcome_callback(id, name, x, y, hp);
             }
         },
@@ -179,7 +167,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
                 x = data[2],
                 y = data[3];
         
-            if(this.move_callback) {
+            if (this.move_callback) {
                 this.move_callback(id, x, y);
             }
         },
@@ -188,7 +176,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
             var id = data[1], 
                 item = data[2];
         
-            if(this.lootmove_callback) {
+            if (this.lootmove_callback) {
                 this.lootmove_callback(id, item);
             }
         },
@@ -197,7 +185,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
             var attacker = data[1], 
                 target = data[2];
         
-            if(this.attack_callback) {
+            if (this.attack_callback) {
                 this.attack_callback(attacker, target);
             }
         },
@@ -208,45 +196,45 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
                 x = data[3],
                 y = data[4];
         
-            if(Types.isItem(kind)) {
+            if (Types.isItem(kind)) {
                 var item = EntityFactory.createEntity(kind, id);
             
-                if(this.spawn_item_callback) {
+                if (this.spawn_item_callback) {
                     this.spawn_item_callback(item, x, y);
                 }
-            } else if(Types.isChest(kind)) {
-                var item = EntityFactory.createEntity(kind, id);
+            } else if (Types.isChest(kind)) {
+                var chest = EntityFactory.createEntity(kind, id);
             
-                if(this.spawn_chest_callback) {
-                    this.spawn_chest_callback(item, x, y);
+                if (this.spawn_chest_callback) {
+                    this.spawn_chest_callback(chest, x, y);
                 }
             } else {
                 var name, orientation, target, weapon, armor;
             
-                if(Types.isPlayer(kind)) {
+                if (Types.isPlayer(kind)) {
                     name = data[5];
                     orientation = data[6];
                     armor = data[7];
                     weapon = data[8];
-                    if(data.length > 9) {
+                    if (data.length > 9) {
                         target = data[9];
                     }
                 }
-                else if(Types.isMob(kind)) {
+                else if (Types.isMob(kind)) {
                     orientation = data[5];
-                    if(data.length > 6) {
+                    if (data.length > 6) {
                         target = data[6];
                     }
                 }
 
                 var character = EntityFactory.createEntity(kind, id, name);
             
-                if(character instanceof Player) {
+                if (character instanceof Player) {
                     character.weaponName = Types.getKindAsString(weapon);
                     character.spriteName = Types.getKindAsString(armor);
                 }
             
-                if(this.spawn_character_callback) {
+                if (this.spawn_character_callback) {
                     this.spawn_character_callback(character, x, y, orientation, target);
                 }
             }
@@ -255,7 +243,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         receiveDespawn: function(data) {
             var id = data[1];
         
-            if(this.despawn_callback) {
+            if (this.despawn_callback) {
                 this.despawn_callback(id);
             }
         },
@@ -264,11 +252,11 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
             var points = data[1],
                 isRegen = false;
         
-            if(data[2]) {
+            if (data[2]) {
                 isRegen = true;
             }
         
-            if(this.health_callback) {
+            if (this.health_callback) {
                 this.health_callback(points, isRegen);
             }
         },
@@ -277,7 +265,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
             var id = data[1],
                 text = data[2];
         
-            if(this.chat_callback) {
+            if (this.chat_callback) {
                 this.chat_callback(id, text);
             }
         },
@@ -286,7 +274,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
             var id = data[1],
                 itemKind = data[2];
         
-            if(this.equip_callback) {
+            if (this.equip_callback) {
                 this.equip_callback(id, itemKind);
             }
         },
@@ -300,7 +288,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
             item.wasDropped = true;
             item.playersInvolved = data[4];
         
-            if(this.drop_callback) {
+            if (this.drop_callback) {
                 this.drop_callback(item, mobId);
             }
         },
@@ -310,7 +298,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
                 x = data[2],
                 y = data[3];
         
-            if(this.teleport_callback) {
+            if (this.teleport_callback) {
                 this.teleport_callback(id, x, y);
             }
         },
@@ -319,7 +307,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
             var id = data[1],
                 dmg = data[2];
         
-            if(this.dmg_callback) {
+            if (this.dmg_callback) {
                 this.dmg_callback(id, dmg);
             }
         },
@@ -328,7 +316,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
             var worldPlayers = data[1],
                 totalPlayers = data[2];
         
-            if(this.population_callback) {
+            if (this.population_callback) {
                 this.population_callback(worldPlayers, totalPlayers);
             }
         },
@@ -336,7 +324,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         receiveKill: function(data) {
             var mobKind = data[1];
         
-            if(this.kill_callback) {
+            if (this.kill_callback) {
                 this.kill_callback(mobKind);
             }
         },
@@ -344,7 +332,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         receiveList: function(data) {
             data.shift();
         
-            if(this.list_callback) {
+            if (this.list_callback) {
                 this.list_callback(data);
             }
         },
@@ -352,7 +340,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         receiveDestroy: function(data) {
             var id = data[1];
         
-            if(this.destroy_callback) {
+            if (this.destroy_callback) {
                 this.destroy_callback(id);
             }
         },
@@ -360,7 +348,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         receiveHitPoints: function(data) {
             var maxHp = data[1];
         
-            if(this.hp_callback) {
+            if (this.hp_callback) {
                 this.hp_callback(maxHp);
             }
         },
@@ -368,7 +356,7 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         receiveBlink: function(data) {
             var id = data[1];
         
-            if(this.blink_callback) {
+            if (this.blink_callback) {
                 this.blink_callback(id);
             }
         },
@@ -466,59 +454,79 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         },
 
         sendHello: function(player) {
-            this.sendMessage([Types.Messages.HELLO,
-                              player.name,
-                              Types.getKindFromString(player.getSpriteName()),
-                              Types.getKindFromString(player.getWeaponName())]);
+            this.sendMessage([
+                Types.Messages.HELLO,
+                player.name,
+                Types.getKindFromString(player.getSpriteName()),
+                Types.getKindFromString(player.getWeaponName())
+            ]);
         },
 
         sendMove: function(x, y) {
-            this.sendMessage([Types.Messages.MOVE,
-                              x,
-                              y]);
+            this.sendMessage([
+                Types.Messages.MOVE,
+                x,
+                y
+            ]);
         },
     
         sendLootMove: function(item, x, y) {
-            this.sendMessage([Types.Messages.LOOTMOVE,
-                              x,
-                              y,
-                              item.id]);
+            this.sendMessage([
+                Types.Messages.LOOTMOVE,
+                x,
+                y,
+                item.id
+            ]);
         },
     
         sendAggro: function(mob) {
-            this.sendMessage([Types.Messages.AGGRO,
-                              mob.id]);
+            this.sendMessage([
+                Types.Messages.AGGRO,
+                mob.id
+            ]);
         },
     
         sendAttack: function(mob) {
-            this.sendMessage([Types.Messages.ATTACK,
-                              mob.id]);
+            this.sendMessage([
+                Types.Messages.ATTACK,
+                mob.id
+            ]);
         },
     
         sendHit: function(mob) {
-            this.sendMessage([Types.Messages.HIT,
-                              mob.id]);
+            this.sendMessage([
+                Types.Messages.HIT,
+                mob.id
+            ]);
         },
     
         sendHurt: function(mob) {
-            this.sendMessage([Types.Messages.HURT,
-                              mob.id]);
+            this.sendMessage([
+                Types.Messages.HURT,
+                mob.id
+            ]);
         },
     
         sendChat: function(text) {
-            this.sendMessage([Types.Messages.CHAT,
-                              text]);
+            this.sendMessage([
+                Types.Messages.CHAT,
+                text
+            ]);
         },
     
         sendLoot: function(item) {
-            this.sendMessage([Types.Messages.LOOT,
-                              item.id]);
+            this.sendMessage([
+                Types.Messages.LOOT,
+                item.id
+            ]);
         },
     
         sendTeleport: function(x, y) {
-            this.sendMessage([Types.Messages.TELEPORT,
-                              x,
-                              y]);
+            this.sendMessage([
+                Types.Messages.TELEPORT,
+                x,
+                y
+            ]);
         },
     
         sendWho: function(ids) {
@@ -527,17 +535,23 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         },
     
         sendZone: function() {
-            this.sendMessage([Types.Messages.ZONE]);
+            this.sendMessage([
+                Types.Messages.ZONE
+            ]);
         },
     
         sendOpen: function(chest) {
-            this.sendMessage([Types.Messages.OPEN,
-                              chest.id]);
+            this.sendMessage([
+                Types.Messages.OPEN,
+                chest.id
+            ]);
         },
     
         sendCheck: function(id) {
-            this.sendMessage([Types.Messages.CHECK,
-                              id]);
+            this.sendMessage([
+                Types.Messages.CHECK,
+                id
+            ]);
         }
     });
     
