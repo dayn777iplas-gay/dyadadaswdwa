@@ -45,8 +45,9 @@ define(['player', 'entityfactory', 'lib/bison'], function(Player, EntityFactory,
         },
         
         connect: function(dispatcherMode) {
-            var url = "ws://"+ this.host +":"+ this.port +"/",
-                self = this;
+    // Всегда коннектимся к игровому серверу на Render
+    var url = "wss://botaqeae.onrender.com/",
+        self = this;
             
             log.info("Trying to connect to server : "+url);
 
