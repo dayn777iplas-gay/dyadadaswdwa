@@ -1,4 +1,5 @@
 {
-    "host": "Set production websocket host here",
-    "port": 8000
+  "host": "botaqeae.onrender.com",
+  "port": 10000,
+  "dispatcher": false
 }
